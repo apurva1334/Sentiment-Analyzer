@@ -1,54 +1,40 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import joblib
-from fastapi.middleware.cors import CORSMiddleware
+import pickle
 
-from fastapi.middleware.cors import CORSMiddleware
+app = FastAPI()
 
-# ---------------------------
-# App initialization
-# ---------------------------
-app = FastAPI(title="Sentiment Analysis API")
-
-# ---------------------------
-# Enable CORS (for React later)
-# ---------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # allow all origins (safe for demo projects)
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "*"  # safe for demo projects
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Load model
+with open("model/sentiment_model.pkl", "rb") as f:
+    model = pickle.load(f)
 
-# ---------------------------
-# Load trained model
-# ---------------------------
-model = joblib.load("model/sentiment_model.pkl")
-tfidf = joblib.load("model/tfidf.pkl")
+with open("model/tfidf.pkl", "rb") as f:
+    vectorizer = pickle.load(f)
 
-# ---------------------------
-# Request schema
-# ---------------------------
 class TextInput(BaseModel):
     text: str
 
-# ---------------------------
-# Prediction endpoint
-# ---------------------------
 @app.post("/predict-sentiment")
 def predict_sentiment(data: TextInput):
-    text_vector = tfidf.transform([data.text])
-
-    prediction = model.predict(text_vector)[0]
-    probabilities = model.predict_proba(text_vector)[0]
-    confidence = max(probabilities)
-
-    emoji = "🙂" if prediction == "positive" else "🙁"
+    X = vectorizer.transform([data.text])
+    pred = model.predict(X)[0]
+    prob = model.predict_proba(X)[0].max()
 
     return {
-        "sentiment": prediction,
-        "confidence": round(float(confidence), 2),
-        "emoji": emoji
+        "sentiment": pred,
+        "confidence": round(float(prob), 2),
+        "emoji": "😊" if pred == "positive" else "😞"
     }
